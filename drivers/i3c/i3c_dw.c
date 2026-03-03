@@ -123,9 +123,16 @@ LOG_MODULE_REGISTER(i3c_dw, CONFIG_I3C_DW_LOG_LEVEL);
 #define RESET_CTRL_RESP_QUEUE BIT(2)
 #define RESET_CTRL_CMD_QUEUE  BIT(1)
 #define RESET_CTRL_SOFT       BIT(0)
+/* Note: IBI_QUEUE reset bit is not available in target mode */
+#ifdef CONFIG_I3C_TARGET_ROLE_ONLY
+#define RESET_CTRL_ALL                                                                             \
+	(RESET_CTRL_RX_FIFO | RESET_CTRL_TX_FIFO | RESET_CTRL_RESP_QUEUE |                         \
+	 RESET_CTRL_CMD_QUEUE | RESET_CTRL_SOFT)
+#else
 #define RESET_CTRL_ALL                                                                             \
 	(RESET_CTRL_IBI_QUEUE | RESET_CTRL_RX_FIFO | RESET_CTRL_TX_FIFO | RESET_CTRL_RESP_QUEUE |  \
 	 RESET_CTRL_CMD_QUEUE | RESET_CTRL_SOFT)
+#endif /* CONFIG_I3C_TARGET_ROLE_ONLY */
 
 #define SLV_EVENT_STATUS        0x38
 #define SLV_EVENT_STATUS_HJ_EN  BIT(3)
@@ -2672,6 +2679,7 @@ static int dw_i3c_init(const struct device *dev)
 	/* reset all */
 	sys_write32(RESET_CTRL_ALL, config->regs + RESET_CTRL);
 
+#ifndef CONFIG_I3C_TARGET_ROLE_ONLY
 	/* get DAT, DCT pointer */
 	data->datstartaddr =
 		DEVICE_ADDR_TABLE_ADDR(sys_read32(config->regs + DEVICE_ADDR_TABLE_POINTER));
@@ -2682,6 +2690,7 @@ static int dw_i3c_init(const struct device *dev)
 	data->maxdevs =
 		DEVICE_ADDR_TABLE_DEPTH(sys_read32(config->regs + DEVICE_ADDR_TABLE_POINTER));
 	data->free_pos = GENMASK(data->maxdevs - 1, 0);
+#endif /* CONFIG_I3C_TARGET_ROLE_ONLY */
 
 	/* get fifo sizes */
 	queue_capability = sys_read32(config->regs + QUEUE_SIZE_CAPABILITY);
@@ -2716,6 +2725,7 @@ static int dw_i3c_init(const struct device *dev)
 	__ASSERT_NO_MSG((IS_ENABLED(CONFIG_I3C_TARGET) && ctrl_config->is_secondary) ||
 			(IS_ENABLED(CONFIG_I3C_CONTROLLER) && !ctrl_config->is_secondary));
 
+#ifndef CONFIG_I3C_TARGET_ROLE_ONLY
 	/* disable ibi */
 	sys_write32(IBI_REQ_REJECT_ALL, config->regs + IBI_SIR_REQ_REJECT);
 	sys_write32(IBI_REQ_REJECT_ALL, config->regs + IBI_MR_REQ_REJECT);
@@ -2723,6 +2733,8 @@ static int dw_i3c_init(const struct device *dev)
 	/* disable hot-join */
 	sys_write32(sys_read32(config->regs + DEVICE_CTRL) | (DEV_CTRL_HOT_JOIN_NACK),
 		    config->regs + DEVICE_CTRL);
+#endif /* CONFIG_I3C_TARGET_ROLE_ONLY */
+
 #ifdef CONFIG_I3C_CONTROLLER
 	ret = i3c_addr_slots_init(dev);
 	if (ret != 0) {
